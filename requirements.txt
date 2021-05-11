@@ -1,0 +1,5 @@
+websockets
+influxdb
+asyncio
+pydantic
+python-dotenv
