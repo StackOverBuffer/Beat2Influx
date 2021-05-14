@@ -6,7 +6,7 @@ class Beatmap(BaseModel):
     songSubName: str
     songAuthorName: str
     levelAuthorName: str
-    songHash: str
+    songHash: str = Field(None)
     levelId: str
     songBPM: float
     noteJumpSpeed: float

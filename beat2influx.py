@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """
 Logs Beat Saber song and performance metrics to influxdb
 """
@@ -19,14 +20,14 @@ from models import *
 load_dotenv()  # take environment variables from .env.
 
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.ERROR)
 
 BEATSABER_SOCKET = os.getenv("BEATSABER_SOCKET", "ws://localhost:6557/socket")
 INFLUX_HOST = os.getenv("INFLUX_HOST", "localhost")
 INFLUX_DB = os.getenv("INFLUX_DB", "beat2influx")
 INFLUX_USER = os.getenv("INFLUX_USER", "admin")
 INFLUX_PASS = os.getenv("INFLUX_PASS", "admin")
-
+CONNECTED_COMMAND = os.getenv("CONNECTED_COMMAND", None)  # Command to execute after client has connected to Beat Saber
 
 LOG_RESPONSES = False
 song_start_data = None
@@ -47,7 +48,7 @@ def connect_db():
 async def save_start(status):
     global song_start_data
     global last_song_name
-    logger.info("Save start")
+    logger.info("Level started")
 
     if 'beatmap' not in status:
         return
@@ -88,8 +89,9 @@ def write_to_db(query, db):
 
 async def log_done(status, db):
     global song_start_data
-    logger.error("Log Done")
+    logger.error("Level finished")
     if 'performance' not in status:
+        logger.error("Performance data missing")
         return
     if song_start_data is None:
         logger.error("Log done without start data!")
@@ -114,7 +116,7 @@ async def log_done(status, db):
 
 
 async def log_note(event, db, miss=False):
-    logger.error("Log Note")
+    logger.debug("Log Note")
     if 'noteCut' not in event:
         return
     if event['noteCut'] == 'null':
@@ -146,7 +148,7 @@ async def callback(message, db):
         log_response(message)
 
     event_type = event['event']
-    logger.info(f"Event Type: {event_type}")
+    logger.debug(f"Event Type: {event_type}")
 
     if event_type == 'songStart':
         await save_start(event['status'])
@@ -156,6 +158,10 @@ async def callback(message, db):
         await log_note(event, db, miss=False)
     elif event_type == 'noteMissed':
         await log_note(event, db, miss=True)
+    elif event_type == 'hello':
+        logger.error("Received hello vom Beat Saber!")
+        if CONNECTED_COMMAND is not None:
+            os.system(CONNECTED_COMMAND)
 
 
 async def consumer_handler():
@@ -169,7 +175,7 @@ async def consumer_handler():
                 except InfluxDBClientError as e:
                     log_response(f"{e}\n{message}")
             db.close()
-    except ConnectionRefusedError as e:
+    except (ConnectionRefusedError, OSError) as e:
         logger.debug(f"Could not connect {e}")
     except ConnectionClosedError as e:
         logger.info(f"Disconnected: {e}")
